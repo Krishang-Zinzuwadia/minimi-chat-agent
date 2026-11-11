@@ -34,3 +34,12 @@ CREATE TABLE IF NOT EXISTS owner_limits (
  admitted_count integer NOT NULL CHECK (admitted_count BETWEEN 1 AND 60),
  CHECK ((lease_token IS NULL) = (lease_expires_at IS NULL))
 );
+
+-- Public demo admission is atomic across Workers and survives deployments.
+-- Do not reset counters automatically: total_count is a lifetime spending fuse.
+CREATE TABLE IF NOT EXISTS public_limits (
+ scope text PRIMARY KEY CHECK (length(scope) BETWEEN 1 AND 256),
+ day date NOT NULL,
+ daily_count integer NOT NULL CHECK (daily_count > 0),
+ total_count integer NOT NULL CHECK (total_count > 0)
+);

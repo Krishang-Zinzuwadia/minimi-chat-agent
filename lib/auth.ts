@@ -1,10 +1,11 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import type { Config } from "./config";
 import { AppError } from "./errors";
 const keysets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 export async function authorize(
   request: Request,
   config: Config,
+  responseHeaders?: Headers,
 ): Promise<string> {
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -42,6 +43,65 @@ export async function authorize(
     request.headers.get("sec-fetch-site") === "cross-site"
   )
     throw new AppError(403, "Cross-origin requests are not allowed.");
+  if (config.authMode === "public") {
+    if (config.mode !== "live" || config.sessionSecret.length < 32)
+      throw new AppError(503, "Public access is not configured.");
+    if (
+      requestOrigin !== config.publicOrigin ||
+      url.origin !== config.publicOrigin ||
+      (request.method !== "GET" && origin !== config.publicOrigin)
+    )
+      throw new AppError(403, "A same-origin request is required.");
+    const cookie = request.headers
+      .get("cookie")
+      ?.split(";")
+      .map((s) => s.trim())
+      .find((s) => s.startsWith("__Host-minimi="))
+      ?.slice("__Host-minimi=".length);
+    const key = new TextEncoder().encode(config.sessionSecret);
+    if (cookie) {
+      try {
+        const { payload } = await jwtVerify(cookie, key, {
+          algorithms: ["HS256"],
+          audience: config.publicOrigin,
+          issuer: "minimi-public",
+          requiredClaims: ["sub", "iat", "exp"],
+          maxTokenAge: "30d",
+        });
+        if (
+          typeof payload.sub !== "string" ||
+          !/^visitor:[0-9a-f-]{36}$/.test(payload.sub)
+        )
+          throw new Error();
+        return payload.sub;
+      } catch {
+        /* Only the read-only bootstrap may replace an expired/invalid session. */
+      }
+    }
+    if (
+      request.method !== "GET" ||
+      url.pathname !== "/api/conversations" ||
+      !responseHeaders
+    )
+      throw new AppError(
+        401,
+        "Reload the page to start a private visitor session.",
+      );
+    const owner = `visitor:${crypto.randomUUID()}`;
+    const token = await new SignJWT({})
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject(owner)
+      .setIssuer("minimi-public")
+      .setAudience(config.publicOrigin)
+      .setIssuedAt()
+      .setExpirationTime("30d")
+      .sign(key);
+    responseHeaders.set(
+      "Set-Cookie",
+      `__Host-minimi=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
+    );
+    return owner;
+  }
   if (config.authMode === "local") {
     if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
       throw new AppError(

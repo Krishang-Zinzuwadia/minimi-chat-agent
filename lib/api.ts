@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { loadConfig, publicStatus, type Config } from "./config";
+import { PublicLimits } from "./public-limits";
 import { authorize } from "./auth";
 import { AppError } from "./errors";
 import { NeonMemory } from "./memory";
@@ -59,6 +60,7 @@ async function readBody(request: Request): Promise<unknown> {
 }
 interface Dependencies {
   config?: () => Config;
+  limits?: (config: Config) => Pick<PublicLimits, "admit">;
   memory?: (config: Config, owner: string) => MemoryStore;
   agent?: (
     memory: MemoryStore,
@@ -66,13 +68,21 @@ interface Dependencies {
   ) => { run: (input: RunInput) => Promise<unknown> };
 }
 export function createApi(deps: Dependencies = {}) {
-  return async function handle(request: Request): Promise<Response> {
+  async function run(
+    request: Request,
+    responseHeaders: Headers,
+  ): Promise<Response> {
     try {
       const config = (deps.config ?? loadConfig)();
       const path = new URL(request.url).pathname;
       if (request.method === "GET" && path === "/api/status")
         return json(publicStatus(config, request));
-      const owner = await authorize(request, config);
+      const owner = await authorize(request, config, responseHeaders);
+      const limits =
+        config.authMode === "public"
+          ? (deps.limits?.(config) ?? new PublicLimits(config.databaseUrl))
+          : null;
+      await limits?.admit(owner, "api");
       if (config.mode === "setup")
         throw new AppError(
           503,
@@ -129,6 +139,7 @@ export function createApi(deps: Dependencies = {}) {
         }
         if (!(await memory.conversation(conversationId)))
           throw new AppError(404, "Conversation not found.");
+        await limits?.admit(owner, "chat");
         const lease = crypto.randomUUID();
         if (
           !(await memory.acquireLease(
@@ -152,11 +163,20 @@ export function createApi(deps: Dependencies = {}) {
                     apiKey: config.apiKey,
                     model: config.model,
                     baseUrl: config.baseUrl,
+                    publicMode: config.authMode === "public",
+                    beforeRequest: limits
+                      ? () => limits.admit(owner, "model")
+                      : undefined,
                   })
                 : null,
             search:
               config.mode === "live"
-                ? new FirecrawlSearch({ apiKey: config.firecrawlKey })
+                ? new FirecrawlSearch({
+                    apiKey: config.firecrawlKey,
+                    beforeRequest: limits
+                      ? () => limits.admit(owner, "search")
+                      : undefined,
+                  })
                 : null,
           });
         const abort = new AbortController();
@@ -249,5 +269,15 @@ export function createApi(deps: Dependencies = {}) {
         error instanceof AppError ? error.status : 500,
       );
     }
+  }
+  return async function handle(request: Request): Promise<Response> {
+    const headers = new Headers();
+    const response = await run(request, headers);
+    // Never issue a session on a failed admission or cache an identity response.
+    if (response.ok)
+      headers.forEach((value, name) => response.headers.set(name, value));
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Vary", "Cookie, Origin");
+    return response;
   };
 }

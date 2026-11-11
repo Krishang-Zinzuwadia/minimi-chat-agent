@@ -91,7 +91,7 @@ export interface Status {
   timezone: string;
   configured: boolean;
   storage: "memory" | "neon";
-  auth: "local" | "cloudflare-access" | "required";
+  auth: "local" | "cloudflare-access" | "public" | "required";
   missing: string[];
 }
 export type AgentEvent = "status" | "memory" | "delta" | "done" | "error";

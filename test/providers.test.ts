@@ -133,3 +133,58 @@ test("search fails safely, validates shape and blocks unsafe URLs", async () => 
   assert.equal(safeUrl("https://user:password@example.com"), null);
   assert.equal(safeUrl("https://example.com/a"), "https://example.com/a");
 });
+
+test("public provider budgets fail closed, pin Luna, bound output and disable retries", async () => {
+  let calls = 0,
+    admissions = 0;
+  const model = new ResponsesModel({
+    apiKey: "test",
+    model: "unapproved",
+    publicMode: true,
+    beforeRequest: async () => {
+      admissions++;
+    },
+    fetchImpl: async (_, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, "gpt-6-luna");
+      assert.equal(body.max_output_tokens, 1500);
+      return Response.json({ error: { message: "failure" } }, { status: 500 });
+    },
+  });
+  await assert.rejects(() =>
+    model.complete({ instructions: "", input: [], tools: [] }),
+  );
+  assert.equal(calls, 1);
+  assert.equal(admissions, 1);
+  await assert.rejects(
+    () =>
+      model.complete({ instructions: "x".repeat(48001), input: [], tools: [] }),
+    /context/,
+  );
+  assert.equal(calls, 1);
+  assert.equal(admissions, 1);
+  const deny = async () => {
+    throw new Error("usage limit");
+  };
+  const blocked = new ResponsesModel({
+    apiKey: "test",
+    publicMode: true,
+    beforeRequest: deny,
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+  await assert.rejects(
+    () => blocked.complete({ instructions: "", input: [], tools: [] }),
+    /usage limit/,
+  );
+  const search = new FirecrawlSearch({
+    apiKey: "test",
+    beforeRequest: deny,
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+  await assert.rejects(() => search.search("test"), /usage limit/);
+});

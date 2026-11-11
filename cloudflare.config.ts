@@ -1,6 +1,6 @@
 import { bindings, defineConfig, defineWorker } from "cf/config";
 
-// Owner-only Cloudflare Access protects the Worker; preview URLs stay disabled.
+// Public APIs use isolated signed visitor sessions; preview URLs stay disabled.
 // These are declarations only: importing/building this file does not deploy it.
 export default defineConfig({
   accountId: "22372f05b35ed2d2cf9d27b5a49cf807",
@@ -19,7 +19,9 @@ export default defineConfig({
     },
     env: {
       ASSETS: bindings.assets(),
-      AUTH_MODE: bindings.text("cloudflare-access"),
+      AUTH_MODE: bindings.text("public"),
+      PUBLIC_ORIGIN: bindings.text("https://minimi-chat-agent.krishang.dev"),
+      PUBLIC_SESSION_SECRET: bindings.secret(),
       // Access application audience and issuer are public configuration, not secrets.
       CF_ACCESS_TEAM_DOMAIN: bindings.text("https://lingering-pine-8c86.cloudflareaccess.com"),
       CF_ACCESS_AUD: bindings.text("3c3050be740f1a10e37d10880910cbb3fac0a32548f2db8544e6b5926b6891cf"),

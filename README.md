@@ -111,3 +111,25 @@ See the [Cloudflare deployment runbook](docs/DEPLOYMENT.md). Public Worker route
 Retrieval is lexical, not semantic. Dates use documented conservative rules rather than a language-model date parser. Context is capped, so long histories can be incomplete. Sources can be outdated or wrong, and citation validation verifies provenance, not the truth of every generated claim. Cancellation may leave a saved question without an answer. There are per-turn limits and a shared 60-turn daily owner cap, but no currency-denominated billing quota, queue, retries for failed turns or resumable streams. Aborted or failed admitted turns count toward the daily cap. vinext/Cloudflare tooling is beta; a successful build is not a production runtime test.
 
 AI tools assisted implementation. Review the walkthrough and tests and be prepared to explain the choices. The official challenge asks for a public repository at submission; the owner has authorized public release.
+
+### Public visitor mode
+
+Set `AUTH_MODE=public`, `PUBLIC_ORIGIN` to the exact HTTPS origin (no trailing
+slash), and a random `PUBLIC_SESSION_SECRET` of at least 32 characters in the
+host's secret store. Run the additive schema migration before enabling this mode.
+GET `/api/conversations` bootstraps a signed, HttpOnly, Secure, SameSite=Strict,
+host-only 30-day visitor cookie. Clearing it loses access to that visitor's
+history; it never grants access to an Access-authenticated owner's history.
+Writes require an exact same-origin Origin header. No shared public owner exists.
+
+Public requests fail closed when Neon admission fails. Durable atomic ceilings
+are 3,000 API attempts/day (30,000 lifetime), 30 chat attempts/day (300 lifetime),
+and 60 requests/day each for OpenAI and Firecrawl (600 lifetime each). Visitors
+are capped at 120 API, 6 chat, and 12 requests per provider per UTC day, with
+30 times those limits over their lifetime. Failed/cancelled attempts count.
+Clearing cookies cannot bypass global caps. Lifetime counters do not reset on
+redeploy or at midnight. These are usage ceilings, not guaranteed dollar limits;
+provider billing controls should also be configured. Public model requests use
+only gpt-6-luna, no SDK retries, at most 1,500 output tokens and 48,000 characters
+of serialized input/instructions/tools per request. When a global lifetime cap
+is exhausted, service remains capped until an operator explicitly reviews it.

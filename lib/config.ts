@@ -7,7 +7,9 @@ export interface Config {
   firecrawlKey: string;
   databaseUrl: string;
   timezone: string;
-  authMode: "local" | "cloudflare-access";
+  authMode: "local" | "cloudflare-access" | "public";
+  publicOrigin: string;
+  sessionSecret: string;
   accessDomain: string;
   accessAudience: string;
   missing: string[];
@@ -56,9 +58,32 @@ export function loadConfig(
     timezone = "UTC";
   }
   const authMode =
-    env.AUTH_MODE === "cloudflare-access" ? "cloudflare-access" : "local";
-  if (env.AUTH_MODE && !["local", "cloudflare-access"].includes(env.AUTH_MODE))
+    env.AUTH_MODE === "public"
+      ? "public"
+      : env.AUTH_MODE === "cloudflare-access"
+        ? "cloudflare-access"
+        : "local";
+  if (
+    env.AUTH_MODE &&
+    !["local", "cloudflare-access", "public"].includes(env.AUTH_MODE)
+  )
     missing.push("Valid AUTH_MODE");
+  const publicOrigin = env.PUBLIC_ORIGIN || "";
+  const sessionSecret = env.PUBLIC_SESSION_SECRET || "";
+  if (authMode === "public") {
+    if (sessionSecret.length < 32)
+      missing.push("PUBLIC_SESSION_SECRET (32+ characters)");
+    try {
+      const origin = new URL(publicOrigin);
+      if (origin.protocol !== "https:" || origin.origin !== publicOrigin)
+        throw new Error();
+    } catch {
+      missing.push("Valid HTTPS PUBLIC_ORIGIN");
+    }
+    if (!databaseUrl) missing.push("DATABASE_URL");
+    if (forceDemo || !apiKey || !firecrawlKey)
+      missing.push("Public live providers");
+  }
   const accessDomain = (env.CF_ACCESS_TEAM_DOMAIN || "").replace(/\/$/, "");
   const accessAudience = env.CF_ACCESS_AUD || "";
   if (authMode === "cloudflare-access") {
@@ -81,13 +106,15 @@ export function loadConfig(
   }
   return {
     mode: missing.length ? "setup" : forceDemo || !any ? "demo" : "live",
-    model: env.OPENAI_MODEL || "gpt-6-luna",
+    model: "gpt-6-luna",
     baseUrl,
     apiKey,
     firecrawlKey,
     databaseUrl,
     timezone,
     authMode,
+    publicOrigin,
+    sessionSecret,
     accessDomain,
     accessAudience,
     missing,

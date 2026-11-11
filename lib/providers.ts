@@ -31,23 +31,31 @@ export function safeUrl(value: unknown): string | null {
 export class ResponsesModel implements ModelClient {
   private client: OpenAI;
   private model: string;
+  private publicMode: boolean;
+  private beforeRequest?: () => Promise<void>;
   constructor({
     apiKey,
     model = "gpt-6-luna",
     baseUrl = "https://api.openai.com/v1",
     fetchImpl = fetch,
+    publicMode = false,
+    beforeRequest,
   }: {
     apiKey: string;
     model?: string;
     baseUrl?: string;
     fetchImpl?: typeof fetch;
+    publicMode?: boolean;
+    beforeRequest?: () => Promise<void>;
   }) {
-    this.model = model;
+    this.model = "gpt-6-luna";
+    this.publicMode = publicMode;
+    this.beforeRequest = beforeRequest;
     this.client = new OpenAI({
       apiKey,
       baseURL: baseUrl,
       fetch: fetchImpl,
-      maxRetries: 1,
+      maxRetries: publicMode ? 0 : 1,
       timeout: 45_000,
     });
   }
@@ -63,6 +71,12 @@ export class ResponsesModel implements ModelClient {
       ...(signal ? [signal] : []),
       AbortSignal.timeout(45_000),
     ]);
+    if (
+      this.publicMode &&
+      JSON.stringify({ input, instructions, tools }).length > 48_000
+    )
+      throw new Error("Model context is too large. Start a new conversation.");
+    await this.beforeRequest?.();
     let text = "";
     try {
       const request: ResponseCreateParamsStreaming = {
@@ -75,7 +89,7 @@ export class ResponsesModel implements ModelClient {
         include: ["reasoning.encrypted_content"],
         store: false,
         stream: true,
-        max_output_tokens: 6000,
+        max_output_tokens: this.publicMode ? 1500 : 6000,
       };
       const stream = await this.client.responses.create(request, {
         signal: deadline,
@@ -169,6 +183,7 @@ export class FirecrawlSearch implements SearchClient {
       apiKey: string;
       fetchImpl?: typeof fetch;
       now?: () => Date;
+      beforeRequest?: () => Promise<void>;
     },
   ) {}
   async search(
@@ -187,6 +202,7 @@ export class FirecrawlSearch implements SearchClient {
       ...(signal ? [signal] : []),
       AbortSignal.timeout(25_000),
     ]);
+    await this.options.beforeRequest?.();
     let response: Response;
     try {
       response = await (this.options.fetchImpl ?? fetch)(
