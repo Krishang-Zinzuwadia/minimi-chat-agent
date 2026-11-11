@@ -1,31 +1,59 @@
 # Explain the implementation
 
-## Follow one request
+This is a map for understanding and discussing the code, not a script for claiming work or experience that is not yours. AI tools assisted development.
 
-1. `public/app.js` posts the conversation ID, message and browser timezone. It incrementally parses SSE, shows status and provisional tokens, then replaces them with the final persisted answer.
-2. `src/server.js` validates the request, blocks cross-site access, acquires a per-conversation lock and supplies an abort signal. It never sends provider keys to the browser.
-3. `src/agent.js` retrieves memory **before** storing the new user message. This prevents the current question from masquerading as a remembered exchange. It keeps old and new evidence in separate citation namespaces.
-4. `src/time.js` resolves a conservative set of calendar expressions. `src/memory.js` gets exact local-date questions or FTS matches, then pairs each with its actual next assistant message in that conversation.
-5. `src/providers.js` streams the model response. If the model requests `web_search`, the agent validates its arguments and executes only that function. Search snippets become evidence, not new system instructions.
-6. The final answer’s citation IDs are checked against the evidence registry. The answer, cited sources, timestamps and metrics are saved together, then a `done` event tells the UI it is complete.
+## Start with the request
 
-## Decisions worth defending
+1. `app/page.tsx` renders `RecallWorkspace` from `components/recall-workspace.tsx`.
+2. The component reads `/api/status` and conversation history. It sends a message with the browser's IANA timezone to `/api/chat`.
+3. `app/api/[[...path]]/route.ts` delegates native Next requests to `createApi` in `lib/api.ts`.
+4. The API checks content type, byte size, Zod fields, timezone, owner and conversation existence. It obtains a database lease before creating the SSE stream.
+5. `Agent.run` retrieves history, saves the question, runs a bounded research loop, validates citation identifiers and saves the answer. `done` carries the authoritative saved message.
+6. The UI parses arbitrarily split SSE frames. Text deltas provide feedback, while the final event replaces provisional text. Stop aborts the request; a generation guard prevents duplicate sends.
 
-- **Why record exact answers?** A future price comparison needs the old claim and old billing assumptions, not a summary that may have dropped them.
-- **Why no vector DB?** The challenge explicitly stresses time and previously discussed entities. Date filters plus FTS are deterministic, cheap and testable. Semantic retrieval is an improvement only after measuring missed cases.
-- **Why streaming but no separate planning agent?** Direct answers need one model call. A planner would add a fixed latency tax to every message.
-- **Why cap search?** A model can request repeated or irrelevant searches. Application code, not the prompt alone, enforces the spend/latency boundary.
-- **Why not force search for everything?** Greetings and personal recall gain nothing from web results. Current pricing or revalidation does.
-- **What do citations guarantee?** The cited source was available to the answer, with a captured snippet and timestamp. They do not automatically prove every statement is supported.
-- **What happens on Stop?** The connection aborts, upstream fetches receive cancellation and the conversation lock is released. The question remains stored; an incomplete answer is not saved as final.
-- **Why a demo mode?** Reviewers can install and inspect the app without secrets. It is not a substitute for live integration testing and is always labeled.
+## Explain temporal memory
 
-## Suggested one-minute explanation outline
+`lib/temporal.ts` interprets dates in the user's timezone, not the server's local timezone. An explicit ISO date is exact. A month/day without a year uses the most recent occurrence. `last Tuesday` is the most recent Tuesday strictly before today when today is Tuesday. `on Monday` can refer to today if today is Monday. “Still correct today?” is a freshness signal, not a request to discard earlier conversation history.
 
-Use your own words after running and reading the project. Do not claim unperformed benchmarks or independent authorship.
+`NeonMemory.retrieve` has two paths:
 
-- 0–10s: The central problem is distinguishing actual conversation memory from current web evidence.
-- 10–25s: Explain SQLite timestamps, date-first/FTS retrieval and preserved answer/source snapshots.
-- 25–40s: Explain the one-tool loop, parallel searches, bounded rounds and streaming.
-- 40–50s: Show a missing-history query and a dated recheck with historical/current citation labels.
-- 50–60s: Name the tradeoff: simple deterministic retrieval now; measured semantic recall and live evaluation next.
+- Explicit date: retrieve that owner's user messages whose timestamp falls on the requested local day, across conversations.
+- Topic: English Postgres full-text search with OR terms and stemming. An assistant match maps back to its preceding user question.
+
+Both return at most 12 question/answer pairs and a total count. An answer is paired only if it is the next message after that question. This avoids joining an abandoned question to a later turn. The agent additionally includes up to 16 recent current-conversation messages and caps the serialized context. Truncation is stated in the model instructions.
+
+The original text and source snapshots are immutable records in the app's normal flow. Historical sources get new `H` identifiers for this request; live search gets `S` identifiers. The URL may match, but a saved retrieval timestamp is not silently refreshed.
+
+## Explain the model/tool loop
+
+`ResponsesModel` uses the official SDK to parse Responses SSE. It does not store conversations at OpenAI. With `store:false`, opaque encrypted reasoning output is carried into the next request together with the function call and its `function_call_output`. This state is not shown in the UI.
+
+Only `web_search` is advertised. Arguments are validated as one to three nonempty queries of at most 500 characters. Repeated queries are deduplicated case-insensitively and the entire turn has at most six queries and three model rounds. Firecrawl searches the web and returns page excerpts in the same request. No arbitrary URL fetch or second agent tool is available.
+
+Freshness language forces a search on the first model round and sets Firecrawl's page cache age to zero. Independent queries run concurrently. Search failures are tool results the model can reason about, and the final response adds a warning if verification failed. If an answer cites an unknown ID, it becomes `[unverified source]`. This establishes source provenance; it cannot prove every factual statement correct.
+
+## Explain persistence and concurrency
+
+`db/schema.sql` creates conversations and messages. Sources/metadata are JSONB; generated `tsvector` plus GIN index supports lexical retrieval. All SQL parameters are bound, and all reads/writes require the owner identity. A conversation UUID alone grants no access.
+
+An atomic conditional UPSERT/CTE coordinates different Worker instances. An `owner_limits` row allows one active turn per owner, across conversations, and at most 60 admitted turns per UTC day. Admitted attempts still count after cancellation or failure; rejected claims do not. It has a token and expiry; only the holder's token can release it. A stale request cannot release a newer lease. The TTL exceeds the request deadline. Saving the first user message also sets the title in the same SQL statement while holding the conversation row lock.
+
+The schema migration runs explicitly as a transaction. It is not a background side effect of reading history, building or starting the server. PGlite tests execute this SQL against an actual embedded PostgreSQL engine, while real Neon transport remains a separate release check.
+
+## Explain authentication and failure modes
+
+`AUTH_MODE=local` permits only loopback development. Hosted APIs require Cloudflare Access. `jose` verifies signature, exact issuer, audience, expiry and required claims against the team's published keys. A forged header cannot create an identity. Cross-origin requests are rejected, and sources only link to HTTP(S) URLs without embedded credentials.
+
+There is a 90-second API deadline, per-provider deadlines, a bounded output and request-body limit, and a same-conversation lease. The 60-turn owner cap is a request limit, not a currency-denominated spending cap. Stop propagates an abort signal. The user's question may already be saved when cancellation happens, but an incomplete assistant answer is not persisted.
+
+Demo mode clearly says it is offline, uses temporary per-owner in-process memory and never calls external providers. It is useful for UI and contract tests, not proof of production readiness.
+
+## Questions worth practicing
+
+- Why store original answers instead of asking the model to reconstruct history?
+- Why are source retrieval time and page publication time different?
+- What happens if two Worker instances answer one conversation at once?
+- Why not use embeddings, Hono or an agent framework for this scope?
+- What do a build, a mocked provider test and a live integration test each prove?
+- Why must a hosted paid-API app require authentication and a spending budget?
+- How could idempotency, resumable streaming and per-owner rate limits improve this design?

@@ -1,0 +1,8 @@
+node_modules
+.next
+.cloudflare
+dist
+package-lock.json
+.superpowers
+playwright-report
+test-results

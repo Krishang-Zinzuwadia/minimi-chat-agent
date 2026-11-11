@@ -7,3 +7,14 @@ coverage/
 *.log
 .DS_Store
 .superpowers/
+.next/
+.open-next/
+.vinext/
+dist/
+.dev.vars
+.cloudflare/
+*.tsbuildinfo
+
+.dev.vars*
+playwright-report/
+test-results/

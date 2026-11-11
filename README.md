@@ -1,67 +1,102 @@
-# Recall · minimi chat-agent challenge
+# Recall · minimi chat agent
 
-A small chat agent with a sense of time. It keeps the question, answer, timestamp and sources together, so “is your answer from last Tuesday still correct?” is a comparison against an actual saved answer, not a guess.
+A time-aware research assistant: ask a question, return to an earlier conversation, and check what changed using current web evidence. Built for the [minimi hiring challenge](https://app.notion.com/p/minimi-hiring-challenge-build-a-chat-agent-4100a8b933b181b98277d8ea5a534d6f).
 
-Built for the [official minimi challenge](https://app.notion.com/p/minimi-hiring-challenge-build-a-chat-agent-4100a8b933b181b98277d8ea5a534d6f). **This repository is private while being prepared. It has not been submitted.** The challenge eventually requests a public repository; changing visibility and submission are separate steps.
+**Status:** private development repository. Not submitted or publicly deployed. The implementation runs without credentials in an explicitly labelled offline demo. Live provider access and production hosting still require secure setup and live verification.
 
-## Run
+## Run locally
 
-Requires **Node.js 22.13+** (Node 24 recommended). No database service or runtime dependencies.
+Node **22.13+** and npm are required.
 
 ```sh
 npm install
-npm run dev
-```
-
-Open **http://localhost:3000**. With no keys, the app starts in an unmistakably labeled **offline demo**: conversation storage and retrieval work, but it does not generate model answers or pretend to search the web.
-
-For real answers:
-
-```sh
 cp .env.example .env
-# Add OPENAI_API_KEY and TAVILY_API_KEY to .env
 npm run dev
 ```
 
-Every required key is listed in `.env.example`. The default model is `gpt-4.1-mini`; `OPENAI_MODEL` and `OPENAI_BASE_URL` support compatible tool-calling models. Live calls may incur your providers’ charges. No keys, accounts, credits or subscriptions are created by this project. Both keys are required for live mode; `npm run demo` always stays offline.
+Open http://127.0.0.1:3000. With no secrets, the app uses temporary in-process demo memory and makes **no model or search calls**. Demo responses exercise timestamped storage and recall; they are not AI-generated. History disappears on restart and is not shared between server processes.
 
-## Try it
+For live mode, configure all three values privately in `.env`, then apply the explicit migration and restart:
 
-1. Ask “Compare Neon, Supabase and Render for a small Postgres project. Include current pricing and billing basis.”
-2. Ask “Which one would you pick?” The current conversation remains in context.
-3. Start a new conversation and ask “What Postgres options did we discuss?” Lexical retrieval finds the earlier exchange.
-4. Ask “What did I ask you on [the date shown in your chat]? Is your answer still correct today?” It retrieves that local calendar day, preserves the old answer, bypasses the local search cache and checks current evidence.
-5. Try a date with no history. It says the record is missing instead of inventing one.
-
-Nothing is pre-seeded as if you had said it. The automated tests contain fixed historical fixtures for 3 November, weekday resolution, pricing comparisons and missing memories.
-
-## What is implemented
-
-- **One external tool: `web_search`.** Up to three independent queries run concurrently, with six queries and three model turns per user turn.
-- **Durable memory:** SQLite with FTS5, timestamped user/assistant messages and immutable source snapshots. Exact local-date retrieval takes precedence over lexical relevance; recent conversation remains available.
-- **Time-aware comparisons:** original evidence is labeled `[H1]`; newly retrieved sources are `[S1]`. Retrieval time and provider-estimated publication/update date are different fields. An unchanged current price alone cannot establish when a change occurred.
-- **Honest uncertainty:** missing memories, empty results, provider failures, malformed tools, unknown citations and timeouts have explicit handling.
-- **Responsive chat:** real model token streaming over SSE, stop controls, saved conversations, source links, timestamps and memory provenance.
-- **Bounded work:** context limits, short search cache, fresh-check cache bypass, provider timeouts, one active turn per conversation, at most three simultaneous turns and cancellation on disconnect.
-
-## Verification
+| Variable            | Required for live mode                                        | Source                                                          |
+| ------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `OPENAI_API_KEY`    | Yes                                                           | [OpenAI project API keys](https://platform.openai.com/api-keys) |
+| `FIRECRAWL_API_KEY` | Yes                                                           | [Firecrawl dashboard](https://www.firecrawl.dev/app)            |
+| `DATABASE_URL`      | Yes, a database connection string rather than another API key | [Neon project → Connect](https://console.neon.tech/)            |
 
 ```sh
-npm test
-npm run check
-npm run smoke
+npm run db:migrate
+npm run dev
 ```
 
-Tests exercise the real SQLite layer, HTTP routes, agent orchestration and provider adapters. External model/search responses are controlled fixtures, not paid requests. They cover dated recall, timezone/day boundaries, persistence, citation binding, cache bypass, tool limits, malformed input, origins, concurrent turns, streaming framing and provider failure. See [verification notes](docs/VERIFICATION.md) for exactly what ran and what remains unverified.
+Use an existing Neon database and its pooled PostgreSQL connection URL. The migration is transactional and idempotent; it creates this app's schema but does not import the earlier SQLite implementation's data. It never runs automatically at startup or build time. Do not point it at an unrelated production database.
 
-## Privacy and limits
+`OPENAI_MODEL` defaults to `gpt-6-luna`, `OPENAI_BASE_URL` to the official OpenAI API, and `TIMEZONE` to UTC. The browser sends its IANA timezone with each question. `DEMO_MODE=true` explicitly forces temporary demo mode. Partial live configuration fails closed with a setup message.
 
-This is a **single-user local app**, not a hosted multi-tenant service. It binds only to loopback, validates Host/Origin and rejects cross-site requests. No authentication is included; do not expose it through a public tunnel or reverse proxy.
+Keep keys server-side. Never commit `.env` / `.dev.vars`, use `NEXT_PUBLIC_*` for credentials, or paste secrets into chat. Provider billing and model access are separate from a ChatGPT subscription. Firecrawl search with page extraction consumes provider credits. A free tier is not a guarantee of a free production deployment.
 
-Chats are stored locally in `data/recall.sqlite`; demo data uses `data/demo.sqlite` so demo answers do not contaminate live history. `.env` and `data/` are ignored by Git. Back up the directory if needed; deleting it resets history. In live mode, the model provider receives the prompt, bounded conversation history and retrieved memories; Tavily receives selected search queries. Avoid entering information you do not want sent to those providers. Secrets stay server-side and are not included in model context.
+## What it does
 
-Date resolution intentionally covers explicit ISO dates, English named dates, weekdays, today and yesterday. Ambiguous numeric dates and vague ranges are not guessed. Lexical retrieval can miss paraphrases. Search snippets can be stale or incomplete even after a fresh provider request. Citation validation proves a source ID exists, not that a claim is entailed. Model behavior and live provider quality still require real-world evaluation.
+- A responsive Next.js workspace with conversation search, Markdown answers, evidence cards, mobile dialogs and reduced-motion support.
+- Timestamped conversation history, scoped to the authenticated owner in Neon Postgres.
+- Deterministic date retrieval for `3 Nov`, `2026-11-03`, `yesterday`, `on Monday` and `last Tuesday`, interpreted in the question's timezone.
+- Postgres full-text retrieval for topic follow-ups across conversations, plus bounded recent context from the current conversation.
+- OpenAI **Responses API** with the real `gpt-6-luna` model, streaming output and stateless reasoning/tool continuation.
+- Exactly one external agent tool, `web_search`, backed by Firecrawl search with page excerpts. No shell, arbitrary browsing, second search tool or external agent framework.
+- Historical evidence labelled `H1`, `H2`, etc.; newly retrieved evidence labelled `S1`, `S2`, etc. Saved retrieval dates are distinct from page publication dates.
+- Freshness questions force a new search and bypass cached page data. Missing history, failed searches and unverified citations remain explicit.
+- Input/context/output bounds, a six-query budget, deadlines, cancellation and Postgres admission guards: one active turn per owner and 60 admitted turns per UTC day.
 
-## Understand the code
+Try the challenge's scenarios after creating real history on the relevant dates:
 
-Read [DESIGN.md](DESIGN.md) for the one-page architecture and tradeoffs, then [the walkthrough](docs/WALKTHROUGH.md) for file responsibilities and interview talking points. AI coding tools assisted this implementation, which the challenge explicitly permits. The applicant should review, run and understand the code before presenting it as their work.
+- “What did I ask you on 3 Nov, and is it still correct today?”
+- “We shortlisted 5 CRMs on Monday. Have any of them shipped updates since then?”
+- “Last Tuesday I asked about Postgres hosting options. Any pricing changes since then?”
+
+There is no fabricated preloaded conversation. A missing dated conversation produces an honest refusal to reconstruct it.
+
+## Stack and layout
+
+- **UI:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, Motion, Radix Dialog, Lucide, React Markdown and GFM.
+- **Backend:** Next.js Route Handlers, native Web Streams/SSE, Zod validation, OpenAI SDK and direct Firecrawl HTTP calls.
+- **Data:** Neon serverless HTTP driver, PostgreSQL JSONB evidence snapshots, GIN full-text index and atomic leases.
+- **Hosting target:** Cloudflare Workers via vinext/Vite. The normal Node `npm run dev` path remains supported.
+
+```text
+app/                  Next.js page, layout and API route
+components/           Responsive Recall workspace
+lib/api.ts            Request validation, ownership, SSE lifecycle
+lib/agent.ts          Retrieval, bounded tool loop, citations, persistence
+lib/providers.ts      OpenAI Responses and Firecrawl adapters
+lib/memory.ts         Owner-scoped PostgreSQL queries
+lib/temporal.ts       Explicit date interpretation
+lib/auth.ts           Loopback-only local mode / verified Access JWT
+lib/demo-memory.ts    Honest ephemeral offline mode
+lib/client/stream.ts  Incremental SSE parsing
+scripts/migrate.ts    Explicit schema migration
+db/schema.sql        Tables, indexes and lease fields
+test/                Unit, SQL integration and browser tests
+```
+
+## Verify
+
+```sh
+npm run check
+npm test
+npm run build
+npm run smoke
+npm run check:cloudflare
+npm run build:vinext
+npx playwright install chromium
+npm run test:browser
+```
+
+Unit/integration tests use fake provider responses and embedded PostgreSQL (PGlite); no paid APIs are invoked. Browser tests force demo mode and clear secrets. See [verification evidence](docs/VERIFICATION.md), [design rationale](DESIGN.md) and the [code walkthrough](docs/WALKTHROUGH.md).
+
+## Deployment and limitations
+
+See the [Cloudflare deployment runbook](docs/DEPLOYMENT.md). Public Worker routes are disabled. Hosted APIs require cryptographically verified Cloudflare Access, separate owner identities, secure secrets, an applied Neon schema and production smoke tests. The current Cloudflare account does not have Access enabled; no Worker has been deployed and no paid plan has been selected.
+
+Retrieval is lexical, not semantic. Dates use documented conservative rules rather than a language-model date parser. Context is capped, so long histories can be incomplete. Sources can be outdated or wrong, and citation validation verifies provenance, not the truth of every generated claim. Cancellation may leave a saved question without an answer. There are per-turn limits and a shared 60-turn daily owner cap, but no currency-denominated billing quota, queue, retries for failed turns or resumable streams. Aborted or failed admitted turns count toward the daily cap. vinext/Cloudflare tooling is beta; a successful build is not a production runtime test.
+
+AI tools assisted implementation. Review the walkthrough and tests and be prepared to explain the choices. The official challenge asks for a public repository at submission; this repo stays **private** until its owner explicitly changes that decision.

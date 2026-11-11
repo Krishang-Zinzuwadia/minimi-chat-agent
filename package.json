@@ -1,18 +1,65 @@
 {
   "name": "minimi-chat-agent",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "A time-aware chat agent with one tool: web search.",
   "type": "module",
+  "description": "Recall: time-aware research chat with Next.js, Neon and GPT-6 Luna.",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "node --env-file-if-exists=.env src/server.js",
-    "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test test/*.test.js",
-    "check": "node scripts/check.js",
-    "demo": "node --env-file-if-exists=.env src/server.js --demo",
-    "smoke": "node scripts/smoke.js"
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "test": "node --import tsx --test test/*.test.ts",
+    "check": "tsc --noEmit",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
+    "check:cloudflare": "vinext check",
+    "dev:vinext": "vite dev --host 127.0.0.1 --port 3001",
+    "build:vinext": "vite build",
+    "start:vinext": "vite preview --host 127.0.0.1",
+    "deploy:vinext": "vinext-cloudflare deploy",
+    "test:browser": "playwright test",
+    "format:check": "prettier --check .",
+    "smoke": "node --import tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "1.2.0",
+    "@radix-ui/react-dialog": "1.3.1",
+    "@vinext/cloudflare": "1.3.4",
+    "clsx": "^2.1.1",
+    "jose": "^6.1.0",
+    "lucide-react": "^0.468.0",
+    "motion": "^12.0.0",
+    "next": "16.4.6",
+    "openai": "^6.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "^10.1.0",
+    "react-server-dom-webpack": "19.3.1",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.0.0",
+    "vinext": "1.4.5",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.14",
+    "@electric-sql/pglite": "^0.5.16",
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "@vitejs/plugin-rsc": "0.5.39",
+    "cf": "1.0.0-beta.29",
+    "prettier": "^3.6.2",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "8.3.8"
+  },
+  "overrides": {
+    "fflate": "0.7.5"
   }
 }

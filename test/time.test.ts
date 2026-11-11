@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { localDay, resolveDate } from "../src/time.js";
+import { localDay, resolveDate, retrievalDate } from "../lib/temporal";
 const now = new Date("2026-11-11T18:00:00Z");
 test("local calendar dates respect timezone midnight", () => {
   assert.equal(localDay("2026-11-11T20:00:00Z", "Asia/Kolkata"), "2026-11-12");
@@ -51,4 +51,31 @@ test("yesterday is a local day across DST changes", () => {
 });
 test("Monday CRM product name is not interpreted as a calendar reference", () => {
   assert.equal(resolveDate("Compare Monday CRM and HubSpot", now, "UTC"), null);
+});
+test("recheck dates do not replace the date of the recalled question", () => {
+  const now = new Date("2026-11-11T12:00:00Z");
+  assert.equal(
+    retrievalDate(
+      "What did I ask you yesterday? Is that advice still correct as of 11 November?",
+      now,
+      "UTC",
+    )?.day,
+    "2026-11-10",
+  );
+  assert.equal(
+    retrievalDate(
+      "What did I ask you last Tuesday, and is it still correct as of 2026-11-11?",
+      now,
+      "UTC",
+    )?.day,
+    "2026-11-10",
+  );
+  assert.equal(
+    retrievalDate(
+      "As of 11 November, is it still correct? We discussed Postgres on Monday.",
+      now,
+      "UTC",
+    )?.day,
+    "2026-11-09",
+  );
 });

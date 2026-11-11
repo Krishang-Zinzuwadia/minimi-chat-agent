@@ -1,29 +1,44 @@
 # Verification record
 
-Checked on 11 November 2026 in a Linux environment running Node.js 24.22.1.
+Local checks on 11 November 2026, Node.js 24.22.1, after the Next.js/Neon rewrite.
 
-## Passed
+## Passed locally
 
-- `npm install`: completes with no runtime dependencies.
-- `npm run check`: every application, browser, script and test JavaScript file passes Node syntax checking.
-- `npm test`: **32 tests passed, 0 failed, 0 skipped**.
-- `npm run smoke`: launches the actual server entry point in a clean temporary data directory, checks HTTP status, creates a conversation, receives a completed SSE demo answer and reads the saved messages. No external API calls.
-- Independent code review and an HTTP cancellation check: disconnect reaches the model abort signal and does not persist a partial assistant answer.
-- Review findings fixed with regression tests: freshness wording must not hide an older shortlist, product name “Monday CRM” is not a weekday anchor, and recent source snapshots retain historical IDs instead of colliding with new citations.
-- A large-source-history regression confirms the initial model prompt remains within its character budget.
+- `npm install` and committed lockfile, with Vite 8.3.8 and the compatible fflate 0.7.5 security override.
+- `npm audit`: **0 vulnerabilities** at verification time.
+- `npm run check`: strict TypeScript check after a clean Next build directory.
+- `npm test`: **45 tests passed, 0 failed, 0 skipped**.
+- `npm run build`: production Next.js build, including the dynamic catch-all API route.
+- `npm run smoke`: starts the compiled Next server, fetches the actual page, creates a conversation, completes demo SSE, reloads two saved messages and rejects a hostile Origin. No live providers called.
+- `npm run check:cloudflare`: **10 supported, 0 partial, 0 issues**.
+- `npm run build:vinext`: production Workers bundle builds with both UI and API. Non-fatal framework sourcemap/chunking and route-classification warnings remain.
+- `npm run test:browser -- --list`: **20 browser cases** discovered across desktop Chromium and mobile Chromium. Discovery is not execution.
+- Independent review and regression fixes: NextRequest loopback normalization, historical versus recheck date selection, shared owner concurrency/daily admission, duplicate search queries, and optimistic/partial message recovery.
 
-The shell emits an environment-level npm `http-proxy` configuration warning; it does not fail these commands.
+## What the tests cover
 
-## Not verified
+- Real embedded PostgreSQL execution via PGlite: idempotent schema, bound parameters, owner isolation, stemming/OR full-text matching, assistant-to-question pairing, timezone day selection, source snapshots and retrieval caps.
+- Atomic conversation/owner leases across adapter instances, 60-turn UTC-day limit, concurrent different conversations, separate owners, expiry takeover and stale token release.
+- Deterministic temporal examples, DST boundaries, invalid dates, product-name ambiguity and separate recall/recheck dates.
+- OpenAI Responses SSE fixtures, stateless encrypted reasoning continuation, bounded single-tool loop and Firecrawl response validation/cache/freshness behavior.
+- Missing history, offline mode, historical/current citation separation, failures and cancellation without saving an incomplete assistant answer.
+- Native API request validation, body bounds, timezone errors, SSE completion, lease release and client disconnect propagation.
+- Cloudflare Access with locally generated test-only RSA signatures: valid identity, wrong audience/issuer, expiry and forged tokens; loopback/Host/Origin protections.
+- Client SSE chunk framing, safe links, API error guards and provisional-turn cleanup.
 
-- **Live model and search calls:** no OpenAI/Tavily credentials were available or created. Provider adapters are tested with controlled HTTP/SSE fixtures. Real model accuracy, tool decisions, external latency, quotas and billing are not measured.
-- **Real browser interaction and visual layout:** headless Chromium was attempted, but the execution environment rejected its required socket operation before a page could open. Browser SSE/parser and safe-link helpers are unit-tested; that is not visual or end-to-end browser verification.
-- **Node 22 locally:** verification used Node 24. The GitHub workflow runs the same checks on Node 22 and 24; its current results must be checked separately.
-- **Production hosting, multi-user isolation and load behavior:** deliberately outside the local single-user scope.
+## Browser and CI evidence
 
-## Before submitting
+The GitHub workflow runs Node 22/24 checks, tests, Next build and production smoke; a separate job builds Cloudflare; another runs all 20 Playwright cases against an isolated demo server and retains desktop/mobile screenshots, failure traces and video. Browser tests explicitly clear provider/database secrets.
 
-1. Configure your own keys through `.env`, run the app and inspect a live dated recheck with original/current sources.
-2. Walk through ordinary follow-ups, Stop, provider failure and page reload in a real browser, on desktop and a narrow viewport.
-3. Read every module and the design tradeoffs; record the requested one-minute explanation in your own words.
-4. Only when ready, separately decide to make the repository public and submit it through the application form. Neither step has been taken here.
+The local environment blocks Chromium's required socket operation. Therefore real browser execution and screenshots must be verified from the workflow for the exact commit, not inferred from test discovery. The workflow result and artifact links will be recorded after that run completes.
+
+## Still not verified
+
+- Live OpenAI/Firecrawl calls: no provider credentials were supplied or created. Real model access, answer quality, provider latency, billing and quotas remain release checks.
+- Real Neon transport and deployed persistence: SQL passes on embedded PostgreSQL, not a provisioned Neon project.
+- Cloudflare runtime preview: local preview was blocked by `os.networkInterfaces()` / `uv_interface_addresses` in the restricted environment. Building the bundle does not verify SSE or authentication on Workers.
+- Production deployment, configured Access, real two-identity isolation, provider budgets and load. Worker routes remain disabled and nothing has been deployed.
+
+## Before submission
+
+Configure credentials securely, apply the schema to the correct database, verify live dated comparisons and source provenance, exercise the protected Cloudflare deployment, and understand the walkthrough/design in your own words. The official challenge requests a public repository and a short explanation; changing visibility and submitting the application require the owner's separate decision. Neither has happened.
