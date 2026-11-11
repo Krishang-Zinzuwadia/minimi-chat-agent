@@ -2,7 +2,7 @@
 
 A time-aware research assistant: ask a question, return to an earlier conversation, and check what changed using current web evidence. Built for the [minimi hiring challenge](https://app.notion.com/p/minimi-hiring-challenge-build-a-chat-agent-4100a8b933b181b98277d8ea5a534d6f).
 
-**Status:** Implementation complete; live provider setup and deployment verification pending. Not submitted. The implementation runs without credentials in an explicitly labelled offline demo. Live provider access and production hosting still require secure setup and live verification.
+**Status:** Public challenge demo deployed at [minimi-chat-agent.krishang.dev](https://minimi-chat-agent.krishang.dev). Live GPT-6 Luna, Firecrawl search, streamed responses, Neon persistence, visitor isolation and cross-origin blocking have been verified. The repository is public. Not submitted. Local execution without credentials remains an explicitly labelled offline demo.
 
 ## Run locally
 
@@ -39,7 +39,7 @@ Keep keys server-side. Never commit `.env` / `.dev.vars`, use `NEXT_PUBLIC_*` fo
 
 - A restrained Next.js workspace with direct prompt suggestions above the composer, self-hosted IBM Plex Sans, conversation search, Markdown answers and on-demand source/history panels.
 - Light, Dark and System appearance with a first-party preference cookie, server-consistent rendering and accessible text contrast.
-- Timestamped conversation history, scoped to the authenticated owner in Neon Postgres.
+- Timestamped conversation history, scoped to the signed visitor session (or authenticated owner in Access mode) in Neon Postgres.
 - Suggestions begin generic and gradually use safe, recent topics from that owner's questions. Selecting one fills and focuses the composer without sending it.
 - Deterministic date retrieval for `3 Nov`, `2026-11-03`, `yesterday`, `on Monday` and `last Tuesday`, interpreted in the question's timezone.
 - Postgres full-text retrieval for topic follow-ups across conversations, plus bounded recent context from the current conversation.
@@ -47,7 +47,7 @@ Keep keys server-side. Never commit `.env` / `.dev.vars`, use `NEXT_PUBLIC_*` fo
 - Exactly one external agent tool, `web_search`, backed by Firecrawl search with page excerpts. No shell, arbitrary browsing, second search tool or external agent framework.
 - Historical evidence labelled `H1`, `H2`, etc.; newly retrieved evidence labelled `S1`, `S2`, etc. Saved retrieval dates are distinct from page publication dates.
 - Freshness questions force a new search and bypass cached page data. Missing history, failed searches and unverified citations remain explicit.
-- Input/context/output bounds, a six-query budget, deadlines, cancellation and Postgres admission guards: one active turn per owner and 60 admitted turns per UTC day.
+- Input/context/output bounds, a six-query budget, deadlines, cancellation and Postgres admission guards. Public mode permits one active turn per visitor, 6 chat attempts per visitor/day and 30 globally/day, with a 300-chat global lifetime fuse and separate provider/API caps below. The underlying owner lease also has a 60-turn daily ceiling; public limits are stricter.
 
 Try the challenge's scenarios after creating real history on the relevant dates:
 
@@ -59,7 +59,7 @@ There is no fabricated preloaded conversation. A missing dated conversation prod
 
 ## How prompt suggestions become personal
 
-`GET /api/suggestions` reads at most 40 of the authenticated owner's recent user messages. It makes no model/search calls and creates no inferred profile. Recognized public topics can appear after a clear recent question; short literal subjects or explicitly named projects require repetition in distinct questions. Recency, repeated interest and topic diversity determine which of the three generic rows are replaced.
+`GET /api/suggestions` reads at most 40 of the current visitor's or authenticated owner's recent user messages. It makes no model/search calls and creates no inferred profile. Recognized public topics can appear after a clear recent question; short literal subjects or explicitly named projects require repetition in distinct questions. Recency, repeated interest and topic diversity determine which of the three generic rows are replaced.
 
 Credential/contact/sensitive-data and instruction-like patterns exclude the entire message. Suggestions use fixed follow-up templates rather than quoting whole conversations or asserting unrecorded facts. This is a conservative English heuristic, not semantic personalization or a complete sensitive-data classifier. Unrecognized topics remain generic; no connected email, GitHub or other account data is read. Offline demo history and personalization reset when its server restarts.
 
@@ -70,7 +70,7 @@ Appearance is saved only in the first-party `recall-theme` cookie. System mode f
 - **UI:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, Motion, Radix Dialog, Lucide, React Markdown and GFM.
 - **Backend:** Next.js Route Handlers, native Web Streams/SSE, Zod validation, OpenAI SDK and direct Firecrawl HTTP calls.
 - **Data:** Neon serverless HTTP driver, PostgreSQL JSONB evidence snapshots, GIN full-text index and atomic leases.
-- **Hosting target:** Cloudflare Workers via vinext/Vite. The normal Node `npm run dev` path remains supported.
+- **Hosting:** Deployed on Cloudflare Workers via vinext/Vite. The normal Node `npm run dev` path remains supported.
 
 ```text
 app/                  Next.js page, layout and API route
@@ -81,7 +81,8 @@ lib/providers.ts      OpenAI Responses and Firecrawl adapters
 lib/memory.ts         Owner-scoped PostgreSQL queries
 lib/temporal.ts       Explicit date interpretation
 lib/suggestions.ts    Bounded, owner-history prompt suggestions
-lib/auth.ts           Loopback-only local mode / verified Access JWT
+lib/auth.ts           Signed public visitors / local mode / Access JWT
+lib/public-limits.ts  Atomic daily and lifetime admission ceilings
 lib/demo-memory.ts    Honest ephemeral offline mode
 lib/client/stream.ts  Incremental SSE parsing
 scripts/migrate.ts    Explicit schema migration
@@ -106,9 +107,9 @@ Unit/integration tests use fake provider responses and embedded PostgreSQL (PGli
 
 ## Deployment and limitations
 
-See the [Cloudflare deployment runbook](docs/DEPLOYMENT.md). Public Worker routes are disabled. Hosted APIs require cryptographically verified Cloudflare Access, separate owner identities, secure secrets, an applied Neon schema and production smoke tests. The current Cloudflare account does not have Access enabled; no Worker has been deployed and no paid plan has been selected.
+See the [verified Cloudflare deployment and safeguards](docs/cloudflare-deployment.md) and [Neon setup](docs/neon-setup.md). The custom domain is public and uses isolated signed visitor sessions, secure Worker secrets and the applied Neon schema. Cloudflare Access remains on the alternate workers.dev hostname, not the public custom domain. Preview URLs are disabled. No paid Cloudflare plan was selected during setup.
 
-Retrieval is lexical, not semantic. Dates use documented conservative rules rather than a language-model date parser. Context is capped, so long histories can be incomplete. Sources can be outdated or wrong, and citation validation verifies provenance, not the truth of every generated claim. Cancellation may leave a saved question without an answer. There are per-turn limits and a shared 60-turn daily owner cap, but no currency-denominated billing quota, queue, retries for failed turns or resumable streams. Aborted or failed admitted turns count toward the daily cap. vinext/Cloudflare tooling is beta; a successful build is not a production runtime test.
+Retrieval is lexical, not semantic. Dates use documented conservative rules rather than a language-model date parser. Context is capped, so long histories can be incomplete. Sources can be outdated or wrong, and citation validation verifies provenance, not the truth of every generated claim. Cancellation may leave a saved question without an answer. Public daily/lifetime admission caps and bounded provider calls reduce abuse, but do not guarantee a dollar maximum or cap infrastructure charges. Public users can exhaust shared quotas; cookie loss or 30-day expiry makes anonymous history inaccessible. There is no currency-denominated billing quota, queue or resumable stream. Public model calls do not retry. Aborted or failed attempts count toward the caps. vinext/Cloudflare tooling is beta; live checks have passed, but are not comprehensive production hardening.
 
 AI tools assisted implementation. Review the walkthrough and tests and be prepared to explain the choices. The official challenge asks for a public repository at submission; the owner has authorized public release.
 
