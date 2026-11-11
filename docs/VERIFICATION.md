@@ -28,9 +28,9 @@ Local checks on 11 November 2026, Node.js 24.22.1, after the Next.js/Neon rewrit
 
 ## Browser and CI evidence
 
-The GitHub workflow runs Node 22/24 checks, tests, Next build and production smoke; a separate job builds Cloudflare; another runs all 20 Playwright cases against an isolated demo server and retains desktop/mobile screenshots, failure traces and video. Browser tests explicitly clear provider/database secrets.
+The GitHub workflow runs Node 22/24 checks, tests, Next build and production smoke; a separate job builds Cloudflare; another runs all 20 Playwright cases against an isolated demo server and retains desktop/mobile screenshots, first-retry traces. Browser tests explicitly clear provider/database secrets.
 
-The local environment blocks Chromium's required socket operation. Therefore real browser execution and screenshots must be verified from the workflow for the exact commit, not inferred from test discovery. The workflow result and artifact links will be recorded after that run completes.
+The local environment blocks Chromium's required socket operation. Therefore real browser execution and screenshots must be verified from the workflow for the exact commit, not inferred from test discovery. See the [Verify workflow](https://github.com/Krishang-Zinzuwadia/minimi-chat-agent/actions/workflows/ci.yml) for each exact commit's results and its `recall-browser-evidence` artifact.
 
 ## Still not verified
 

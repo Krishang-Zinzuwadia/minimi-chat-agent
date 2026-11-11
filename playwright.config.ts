@@ -13,9 +13,9 @@ export default defineConfig({
   outputDir: "test-results",
   use: {
     baseURL: "http://127.0.0.1:3100",
-    trace: "retain-on-failure",
+    trace: "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: "off",
     reducedMotion: "reduce",
     timezoneId: "UTC",
   },

@@ -9,10 +9,7 @@ async function openNavigation(page: Page) {
 }
 async function startFresh(page: Page) {
   await openNavigation(page);
-  await page
-    .getByRole("button", { name: "New conversation", exact: false })
-    .filter({ visible: true })
-    .click();
+  await page.locator("button.new-chat").filter({ visible: true }).click();
   await expect(
     page.getByRole("heading", { name: "Good questions deserve a memory." }),
   ).toBeVisible();
@@ -54,7 +51,9 @@ test.beforeEach(async ({ page }) => {
     page.getByText("Demo mode · No live AI or search.", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Explore something new", exact: false }),
+    page
+      .locator("button.starter-card")
+      .filter({ hasText: "Explore something new" }),
   ).toBeEnabled();
   // Each test uses a new browser context. Local demo storage is server-wide, so
   // prompts carry unique tokens and no test assumes a globally empty history.
@@ -153,7 +152,8 @@ test("starter prompt, Shift+Enter newline, and Enter submit work from the keyboa
   page,
 }) => {
   await page
-    .getByRole("button", { name: "Explore something new", exact: false })
+    .locator("button.starter-card")
+    .filter({ hasText: "Explore something new" })
     .click();
   const input = page.getByRole("textbox", { name: "Ask Recall a question" });
   await expect(input).toBeFocused();
@@ -177,9 +177,7 @@ test("about dialog has an accessible name, traps focus, and closes with Escape",
   page,
 }) => {
   await openNavigation(page);
-  const about = page
-    .getByRole("button", { name: "About Recall", exact: false })
-    .filter({ visible: true });
+  const about = page.locator("button.about-button").filter({ visible: true });
   await about.click();
   const dialog = page.getByRole("dialog", { name: "Research, with a memory." });
   await expect(dialog).toBeVisible();
@@ -260,7 +258,7 @@ test("setup status remains actionable when history cannot be authorized", async 
   await expect(
     page.getByRole("button", { name: "Send question", exact: true }),
   ).toBeDisabled();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.locator('.error-banner[role="alert"]')).toContainText(
     "Hosted authentication is not configured.",
   );
 });
@@ -284,7 +282,7 @@ test("rejected chat removes unsaved user bubble and retry creates only one turn"
   await page
     .getByRole("button", { name: "Send question", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.locator('.error-banner[role="alert"]')).toContainText(
     "Another turn is in progress.",
   );
   await expect(page.locator("article.message")).toHaveCount(0);
@@ -350,7 +348,9 @@ test("partial stream error reconciles saved question and discards unpersisted an
     .getByRole("button", { name: "Send question", exact: true })
     .click();
   expect((await reconciliation).status()).toBe(200);
-  await expect(page.getByRole("alert")).toContainText("Provider interrupted");
+  await expect(page.locator('.error-banner[role="alert"]')).toContainText(
+    "Provider interrupted",
+  );
   await expect(page.locator("article.message.user")).toHaveCount(1);
   await expect(page.locator("article.message.user .prose")).toHaveText(
     question,
@@ -394,7 +394,7 @@ test("failed reconciliation keeps no optimistic turn and explains uncertain hist
   await page
     .getByRole("button", { name: "Send question", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.locator('.error-banner[role="alert"]')).toContainText(
     "Saved history could not be refreshed",
   );
   await expect(page.locator("article.message")).toHaveCount(0);
