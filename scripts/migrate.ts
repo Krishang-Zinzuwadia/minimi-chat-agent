@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
+import nextEnv from "@next/env";
 import { neon } from "@neondatabase/serverless";
+nextEnv.loadEnvConfig(process.cwd());
+
 async function main() {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url)
     throw new Error(
       "DATABASE_URL is required. Set it privately for an existing Neon database, then run npm run db:migrate.",
@@ -22,7 +25,7 @@ async function main() {
 }
 main().catch(() => {
   console.error(
-    process.env.DATABASE_URL
+    process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL
       ? "Database migration failed. Check database connectivity and schema permissions. Credentials are not logged."
       : "DATABASE_URL is required. Set it privately for an existing Neon database, then run npm run db:migrate.",
   );
