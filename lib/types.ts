@@ -43,11 +43,28 @@ export interface MemoryContext {
   total: number;
   truncated: boolean;
 }
+/** A minimal owner-scoped user-message projection, never assistant or source content. */
+export interface RecentQuestion {
+  id: number;
+  content: string;
+  createdAt: string;
+}
+export interface PromptSuggestion {
+  id: string;
+  text: string;
+  kind: "generic" | "history";
+  topic?: string;
+}
+export interface SuggestionsResponse {
+  suggestions: PromptSuggestion[];
+  personalized: boolean;
+}
 export interface MemoryStore {
   createConversation(now?: string): Promise<Conversation>;
   conversation(id: string): Promise<Conversation | null>;
   conversations(): Promise<Conversation[]>;
   messages(id: string, limit?: number): Promise<Message[]>;
+  recentQuestions(limit?: number): Promise<RecentQuestion[]>;
   addMessage(
     conversationId: string,
     role: "user" | "assistant",

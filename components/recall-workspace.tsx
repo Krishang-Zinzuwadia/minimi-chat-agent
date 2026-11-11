@@ -21,7 +21,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Sparkles,
   Square,
   X,
 } from "lucide-react";
@@ -32,25 +31,8 @@ import { createEventParser, safeSourceUrl } from "../lib/client/stream";
 import { discardProvisionalTurn } from "../lib/client/recovery";
 import { apiErrorMessage } from "../lib/client/request";
 import type { Conversation, Message, Source, Status } from "../lib/types";
-const starters = [
-  {
-    icon: Globe2,
-    label: "Explore something new",
-    prompt: "What are the most important developments in AI agents this week?",
-  },
-  {
-    icon: History,
-    label: "See what changed",
-    prompt:
-      "How has the outlook for renewable energy changed over the last year?",
-  },
-  {
-    icon: Layers3,
-    label: "Go a little deeper",
-    prompt:
-      "Compare the trade-offs of serverless and traditional databases for a small team.",
-  },
-];
+import { ThemeControl } from "./theme-provider";
+import { PromptSuggestions } from "./prompt-suggestions";
 const date = (value: string) => {
   const d = new Date(value);
   return Number.isNaN(d.getTime())
@@ -163,10 +145,11 @@ export function RecallWorkspace() {
     [loading, setLoading] = useState(true),
     [phase, setPhase] = useState(""),
     [error, setError] = useState(""),
-    [rail, setRail] = useState(true),
+    [rail, setRail] = useState(false),
     [mobileMenu, setMobileMenu] = useState(false),
     [mobileEvidence, setMobileEvidence] = useState(false),
     [help, setHelp] = useState(false);
+  const [suggestionVersion, setSuggestionVersion] = useState(0);
   const reduced = useReducedMotion();
   const generation = useRef<AbortController | null>(null),
     load = useRef<AbortController | null>(null),
@@ -249,6 +232,7 @@ export function RecallWorkspace() {
     load.current?.abort();
     setLoading(false);
     setSelected(null);
+    setSuggestionVersion((v) => v + 1);
     setMessages([]);
     setDraft("");
     setError("");
@@ -367,6 +351,7 @@ export function RecallWorkspace() {
           );
         if (event === "done" && typeof payload.message === "object") {
           complete = true;
+          setSuggestionVersion((v) => v + 1);
           const final = payload.message;
           setMessages((m) =>
             m.map((item) =>
@@ -482,13 +467,8 @@ export function RecallWorkspace() {
           ))}
         {!conversations.length ? (
           <div className="history-empty">
-            <History size={20} />
-            <p>
-              A little space for
-              <br />
-              your next big question.
-            </p>
-            <span>Your conversations will live here.</span>
+            <p>No conversations yet.</p>
+            <span>Your research will appear here.</span>
           </div>
         ) : conversations.every(
             (c) => !c.title.toLowerCase().includes(query.toLowerCase()),
@@ -497,13 +477,6 @@ export function RecallWorkspace() {
         ) : null}
       </div>
       <div className="sidebar-bottom">
-        <div className="memory-note">
-          <span className="mini-orbit" />
-          <div>
-            <strong>Built to connect the dots.</strong>
-            <p>Every conversation adds context.</p>
-          </div>
-        </div>
         <button
           className="about-button"
           onClick={(event) => {
@@ -535,7 +508,7 @@ export function RecallWorkspace() {
       <div className="rail-title">
         <span>
           <Layers3 size={16} />
-          Behind the answer
+          Sources & context
         </span>
         <button
           className="icon-button desktop-only"
@@ -545,9 +518,7 @@ export function RecallWorkspace() {
           <PanelRightClose size={16} />
         </button>
       </div>
-      <div className="rail-subtitle">
-        A clear trail from question to insight.
-      </div>
+      <div className="rail-subtitle">References for the latest answer.</div>
       <div className="evidence-tabs">
         <span>
           Sources <b>{sources.length}</b>
@@ -565,45 +536,12 @@ export function RecallWorkspace() {
         </div>
       ) : (
         <div className="evidence-empty">
-          <div className="evidence-illustration">
-            <div className="paper back" />
-            <div className="paper">
-              <span />
-              <span />
-              <span />
-              <div>
-                <Check size={12} />
-              </div>
-            </div>
-            <span className="orbit-dot" />
-          </div>
-          <h3>Clarity, not just answers.</h3>
+          <BookOpen size={21} />
+          <h3>No sources yet</h3>
           <p>
-            Sources appear here as your research comes together. See what’s new,
-            and what came from memory.
+            References appear here after a researched answer. Earlier sources
+            are labeled as historical.
           </p>
-          <span className="section-eyebrow">HOW RECALL WORKS</span>
-          <div className="process-step">
-            <span>01</span>
-            <div>
-              <strong>Start with a question</strong>
-              <p>Bring your curiosity. We’ll follow it.</p>
-            </div>
-          </div>
-          <div className="process-step">
-            <span>02</span>
-            <div>
-              <strong>Ground it in evidence</strong>
-              <p>Web research with a source trail.</p>
-            </div>
-          </div>
-          <div className="process-step">
-            <span>03</span>
-            <div>
-              <strong>Keep the context</strong>
-              <p>Past findings, clearly dated.</p>
-            </div>
-          </div>
         </div>
       )}
       <div className="evidence-footer">
@@ -644,10 +582,11 @@ export function RecallWorkspace() {
               {selected
                 ? conversations.find((c) => c.id === selected)?.title ||
                   "Conversation"
-                : "A fresh perspective"}
+                : "New conversation"}
             </strong>
           </div>
           <div className="top-actions">
+            <ThemeControl />
             <span className="mode-indicator">
               <span />
               {status?.mode === "live"
@@ -674,7 +613,7 @@ export function RecallWorkspace() {
         </header>
         {status?.mode === "demo" ? (
           <div className="mode-banner">
-            <Sparkles size={14} />
+            <CircleHelp size={14} />
             <span>
               Demo mode · No live AI or search. Temporary memory resets when the
               server restarts.
@@ -686,14 +625,7 @@ export function RecallWorkspace() {
         >
           {status?.mode === "setup" ? (
             <section className="setup-card">
-              <span className="eyebrow">
-                <span />A LITTLE SETUP, THEN POSSIBILITY
-              </span>
-              <h1>
-                Your workspace.
-                <br />
-                <em>Ready when you are.</em>
-              </h1>
+              <h1>Set up your workspace</h1>
               <p>
                 Configure your provider credentials and access settings on the
                 server to start researching. Secrets belong in your environment,
@@ -783,55 +715,23 @@ export function RecallWorkspace() {
               <div ref={end} />
             </div>
           ) : (
-            <motion.section
-              className="welcome"
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="welcome-symbol">
-                <Mark />
-                <span className="spark spark-one">✧</span>
-                <span className="spark spark-two">+</span>
-              </div>
-              <div className="eyebrow">
-                <span />A LITTLE CURIOSITY GOES A LONG WAY
-              </div>
-              <h1>
-                Good questions
-                <br />
-                deserve a <em>memory.</em>
-              </h1>
-              <p className="welcome-description">
-                Explore what’s happening now.
-                <br />
-                Build on what you discovered before.
-              </p>
-              <div className="starter-grid">
-                {starters.map(({ icon: Icon, label, prompt }, i) => (
-                  <button
-                    className="starter-card"
-                    key={label}
-                    disabled={busy || loading || !status}
-                    onClick={() => {
-                      setDraft(prompt);
-                      input.current?.focus();
-                    }}
-                  >
-                    <div>
-                      <Icon size={18} />
-                      <span>0{i + 1}</span>
-                    </div>
-                    <strong>{label}</strong>
-                    <p>{prompt}</p>
-                    <ArrowUpRight size={15} className="starter-arrow" />
-                  </button>
-                ))}
-              </div>
-            </motion.section>
+            <section className="welcome">
+              <h1>What are you working on?</h1>
+              <p>Research a question. Pick up a thread.</p>
+            </section>
           )}
         </div>
         <div className="composer-wrap">
+          {!messages.length && status?.mode !== "setup" ? (
+            <PromptSuggestions
+              refreshKey={suggestionVersion}
+              disabled={busy || loading || !status}
+              onSelect={(text) => {
+                setDraft(text);
+                input.current?.focus();
+              }}
+            />
+          ) : null}
           {error ? (
             <div className="error-banner" role="alert">
               <span>{error}</span>
@@ -930,15 +830,12 @@ export function RecallWorkspace() {
             </div>
           </form>
           <div className="composer-footnote">
-            <span>
-              Thoughtful answers. Traceable sources. A memory that connects
-              them.
-            </span>
+            <span>Sources and dated context, when available.</span>
             <span>↵ to send</span>
           </div>
         </div>
         <footer className="main-footer">
-          <span>MADE FOR THE CURIOUS</span>
+          <span>Recall</span>
           <span>Recall can make mistakes. Check the sources.</span>
         </footer>
       </main>

@@ -7,6 +7,11 @@ vinext. Neon Postgres uses `@neondatabase/serverless` HTTP queries; OpenAI Respo
 and Firecrawl requests run only on the server. There is no separate API service,
 Pages project, Hyperdrive, persistent filesystem, or shared chat-response cache.
 
+The root layout reads the validated appearance cookie and is force-dynamic.
+Theme-specific HTML is private/no-store; do not add an edge cache in front of it.
+Personalized suggestions use the existing authenticated Neon history and require
+no additional provider, credentials or database migration.
+
 **Nothing has been deployed.** Both `workersDev` and `previewUrls` are disabled in
 `cloudflare.config.ts`, with no custom-domain route. Keep them disabled until the
 release checklist below is complete. The private GitHub repository stays private.
@@ -66,9 +71,9 @@ npm run build:vinext
 npm run start:vinext
 ```
 
-Configuration verification on 2026-11-11: `vinext check` reported 10 supported,
+Configuration verification on 2026-11-11: `vinext check` reported 12 supported,
 0 partial and 0 issues, and `vite build` completed successfully with the UI and
-API handlers. The final report had 10 supported items. The build emitted non-fatal framework sourcemap and
+API handlers. The final report had 12 supported items. The build emitted non-fatal framework sourcemap and
 chunking warnings. A loopback `vite preview` attempt could not start in the
 restricted workspace: Node's `os.networkInterfaces()` failed with
 `uv_interface_addresses` / `ERR_SYSTEM_ERROR` inside Cloudflare's inspector-port

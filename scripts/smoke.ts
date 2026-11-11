@@ -59,7 +59,25 @@ try {
   assert.ok(ready, "Next server did not start");
   const page = await fetch(origin);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /<h1>Good questions/);
+  assert.match(await page.text(), /<h1>What are you working on/);
+  assert.match(page.headers.get("cache-control") ?? "", /private/);
+  assert.match(page.headers.get("cache-control") ?? "", /no-store/);
+  const dark = await fetch(origin, {
+    headers: { Cookie: "recall-theme=dark" },
+  });
+  assert.match(await dark.text(), /data-theme="dark"/);
+  const invalid = await fetch(origin, {
+    headers: { Cookie: "recall-theme=invalid" },
+  });
+  assert.match(await invalid.text(), /data-theme="system"/);
+  const suggestions = await fetch(origin + "/api/suggestions");
+  assert.equal(suggestions.status, 200);
+  const prompts = (await suggestions.json()) as {
+    suggestions: unknown[];
+    personalized: boolean;
+  };
+  assert.equal(prompts.suggestions.length, 3);
+  assert.equal(prompts.personalized, false);
   const created = await post("/api/conversations", {});
   assert.equal(created.status, 201);
   const c = (await created.json()) as { id: string };
@@ -81,7 +99,7 @@ try {
   });
   assert.equal(bad.status, 403);
   console.log(
-    "Production HTTP smoke passed: page, create, SSE, stored history and cross-origin rejection. No live providers called.",
+    "Production HTTP smoke passed: page/theme cookies/cache protection, generic suggestions, create, SSE, stored history and cross-origin rejection. No live providers called.",
   );
 } catch (error) {
   console.error(log);

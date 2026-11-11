@@ -1,6 +1,6 @@
 {
   "name": "minimi-chat-agent",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "Recall: time-aware research chat with Next.js, Neon and GPT-6 Luna.",

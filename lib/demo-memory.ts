@@ -5,8 +5,13 @@ import type {
   Source,
   MemoryContext,
   MemoryStore,
+  RecentQuestion,
 } from "./types";
 import { lexicalTerms, localDay, retrievalDate } from "./temporal";
+import {
+  MAX_SUGGESTION_QUESTIONS,
+  MAX_SUGGESTION_QUESTION_LENGTH,
+} from "./suggestions";
 /** Temporary process-local demo only. Never used as fallback for a failed live database. */
 export class DemoMemory implements MemoryStore {
   private chats = new Map<string, Conversation>();
@@ -49,6 +54,23 @@ export class DemoMemory implements MemoryStore {
         .filter((m) => m.conversationId === id)
         .slice(-Math.min(500, Math.max(1, Math.trunc(limit) || 1))),
     );
+  }
+  async recentQuestions(
+    limit = MAX_SUGGESTION_QUESTIONS,
+  ): Promise<RecentQuestion[]> {
+    return this.entries
+      .filter((message) => message.role === "user")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id)
+      .slice(
+        0,
+        Math.min(MAX_SUGGESTION_QUESTIONS, Math.max(1, Math.trunc(limit) || 1)),
+      )
+      .map(({ id, content, createdAt }) => ({
+        id,
+        content:
+          content.length <= MAX_SUGGESTION_QUESTION_LENGTH ? content : "",
+        createdAt,
+      }));
   }
   async addMessage(
     conversationId: string,

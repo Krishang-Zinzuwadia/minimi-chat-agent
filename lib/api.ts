@@ -7,6 +7,7 @@ import { getDemoMemory } from "./demo-memory";
 import { Agent, type RunInput } from "./agent";
 import { ResponsesModel, FirecrawlSearch } from "./providers";
 import type { MemoryStore, Emit } from "./types";
+import { buildSuggestions } from "./suggestions";
 
 const ChatBody = z
   .object({
@@ -82,6 +83,11 @@ export function createApi(deps: Dependencies = {}) {
         (config.mode === "live"
           ? new NeonMemory(config.databaseUrl, owner)
           : getDemoMemory(owner));
+      if (path === "/api/suggestions") {
+        if (request.method !== "GET")
+          throw new AppError(405, "Method not allowed.");
+        return json(buildSuggestions(await memory.recentQuestions()));
+      }
       if (path === "/api/conversations") {
         if (request.method === "GET") return json(await memory.conversations());
         if (request.method === "POST") {

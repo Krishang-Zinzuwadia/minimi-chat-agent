@@ -48,6 +48,14 @@ There is a 90-second API deadline, per-provider deadlines, a bounded output and 
 
 Demo mode clearly says it is offline, uses temporary per-owner in-process memory and never calls external providers. It is useful for UI and contract tests, not proof of production readiness.
 
+## Explain suggestions and appearance
+
+`GET /api/suggestions` uses the same authentication and owner-scoped memory as chat. `recentQuestions` is one bounded SQL read, restricted to user-authored messages. `buildSuggestions` recognizes safe public subjects and narrowly extracted English topics or explicit project names. Literal topics require repeated distinct questions; stale, duplicate, oversized, sensitive-pattern and instruction-like messages are excluded. The response always has three rows, filling unused places with generic prompts. No OpenAI/Firecrawl call, connected-account research or permanent inferred profile is involved. This deliberately limited heuristic should not be presented as a complete understanding of the user.
+
+`PromptSuggestions` refreshes as the conversation history changes. Selecting a row fills and focuses the draft, leaving the decision to send with the user. Endpoint failure falls back to generic prompts without blocking chat.
+
+`ThemeProvider` saves only an allowlisted Light/Dark/System preference in a first-party cookie. The async server layout reads the same preference before rendering, and CSS resolves System mode. This avoids a server/client `matchMedia` disagreement. The layout is dynamic and HTML is private/no-store. IBM Plex Sans is served from bundled WOFF2 files with its OFL license, not a third-party font service.
+
 ## Questions worth practicing
 
 - Why store original answers instead of asking the model to reconstruct history?

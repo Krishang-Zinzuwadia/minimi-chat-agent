@@ -1,18 +1,18 @@
 # Verification record
 
-Local checks on 11 November 2026, Node.js 24.22.1, after the Next.js/Neon rewrite.
+Local checks on 11 November 2026, Node.js 24.22.1, after the 2.1 dark-mode, typography and prompt-suggestion redesign.
 
 ## Passed locally
 
 - `npm install` and committed lockfile, with Vite 8.3.8 and the compatible fflate 0.7.5 security override.
 - `npm audit`: **0 vulnerabilities** at verification time.
 - `npm run check`: strict TypeScript check after a clean Next build directory.
-- `npm test`: **45 tests passed, 0 failed, 0 skipped**.
+- `npm test`: **65 tests passed, 0 failed, 0 skipped**.
 - `npm run build`: production Next.js build, including the dynamic catch-all API route.
-- `npm run smoke`: starts the compiled Next server, fetches the actual page, creates a conversation, completes demo SSE, reloads two saved messages and rejects a hostile Origin. No live providers called.
-- `npm run check:cloudflare`: **10 supported, 0 partial, 0 issues**.
+- `npm run smoke`: starts the compiled Next server, fetches the actual page, checks Light/Dark/System theme cookies and private/no-store HTML, reads generic suggestions, creates a conversation, completes demo SSE, reloads two saved messages and rejects a hostile Origin. No live providers called.
+- `npm run check:cloudflare`: **12 supported, 0 partial, 0 issues**.
 - `npm run build:vinext`: production Workers bundle builds with both UI and API. Non-fatal framework sourcemap/chunking and route-classification warnings remain.
-- `npm run test:browser -- --list`: **20 browser cases** discovered across desktop Chromium and mobile Chromium. Discovery is not execution.
+- `npm run test:browser -- --list`: **36 browser cases** discovered across desktop Chromium and mobile Chromium. Discovery is not execution.
 - Independent review and regression fixes: NextRequest loopback normalization, historical versus recheck date selection, shared owner concurrency/daily admission, duplicate search queries, and optimistic/partial message recovery.
 
 ## What the tests cover
@@ -25,10 +25,13 @@ Local checks on 11 November 2026, Node.js 24.22.1, after the Next.js/Neon rewrit
 - Native API request validation, body bounds, timezone errors, SSE completion, lease release and client disconnect propagation.
 - Cloudflare Access with locally generated test-only RSA signatures: valid identity, wrong audience/issuer, expiry and forged tokens; loopback/Host/Origin protections.
 - Client SSE chunk framing, safe links, API error guards and provisional-turn cleanup.
+- Six WCAG contrast assertions for light/dark/system palettes, including muted text, errors, historical evidence and focus.
+- Fourteen suggestion tests: generic starts, recent public topics, repeated literal project/subject prompts, owner isolation, conservative sensitivity filters, recency/duplicate/size limits and no provider calls.
+- Browser cases cover appearance persistence, system preference, no auto-send when choosing a suggestion, actual history-based personalization, and 390×520, 390×360 and 740×360 layouts in both themes.
 
 ## Browser and CI evidence
 
-The GitHub workflow runs Node 22/24 checks, tests, Next build and production smoke; a separate job builds Cloudflare; another runs all 20 Playwright cases against an isolated demo server and retains desktop/mobile screenshots, first-retry traces. Browser tests explicitly clear provider/database secrets.
+The GitHub workflow runs Node 22/24 checks, tests, Next build and production smoke; a separate job builds Cloudflare; another runs all 36 Playwright cases against an isolated demo server and retains desktop/mobile screenshots, first-retry traces. Browser tests explicitly clear provider/database secrets.
 
 The local environment blocks Chromium's required socket operation. Therefore real browser execution and screenshots must be verified from the workflow for the exact commit, not inferred from test discovery. See the [Verify workflow](https://github.com/Krishang-Zinzuwadia/minimi-chat-agent/actions/workflows/ci.yml) for each exact commit's results and its `recall-browser-evidence` artifact.
 

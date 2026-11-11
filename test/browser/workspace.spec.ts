@@ -11,7 +11,7 @@ async function startFresh(page: Page) {
   await openNavigation(page);
   await page.locator("button.new-chat").filter({ visible: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Good questions deserve a memory." }),
+    page.getByRole("heading", { name: "What are you working on?" }),
   ).toBeVisible();
 }
 async function sendQuestion(page: Page, question: string) {
@@ -66,11 +66,7 @@ test.beforeEach(async ({ page }) => {
   await expect(
     page.getByText("Demo mode · No live AI or search.", { exact: false }),
   ).toBeVisible();
-  await expect(
-    page
-      .locator("button.starter-card")
-      .filter({ hasText: "Explore something new" }),
-  ).toBeEnabled();
+  await expect(page.locator("button.suggestion-row").first()).toBeEnabled();
   // Each test uses a new browser context. Local demo storage is server-wide, so
   // prompts carry unique tokens and no test assumes a globally empty history.
 });
@@ -85,7 +81,7 @@ test("real demo starts with editorial welcome and captures viewport layouts", as
 }, info) => {
   await expect(page).toHaveTitle("Recall — Research, with a memory");
   await expect(
-    page.getByRole("heading", { name: "Good questions deserve a memory." }),
+    page.getByRole("heading", { name: "What are you working on?" }),
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Ask Recall a question" }),
@@ -168,15 +164,12 @@ test("switches history, searches titles, and recalls a prior timestamped questio
 test("starter prompt, Shift+Enter newline, and Enter submit work from the keyboard", async ({
   page,
 }) => {
-  await page
-    .locator("button.starter-card")
-    .filter({ hasText: "Explore something new" })
-    .click();
+  const suggestion = page.locator("button.suggestion-row").first();
+  const prompt = await suggestion.getAttribute("aria-label");
+  await suggestion.click();
   const input = page.getByRole("textbox", { name: "Ask Recall a question" });
   await expect(input).toBeFocused();
-  await expect(input).toHaveValue(
-    "What are the most important developments in AI agents this week?",
-  );
+  await expect(input).toHaveValue(prompt ?? "");
   await input.fill(`keyboard${Date.now()}`);
   await input.press("End");
   await input.press("Shift+Enter");
@@ -227,7 +220,7 @@ test("evidence panel can be opened, dismissed, and does not fabricate sources", 
   });
   if (info.project.name.startsWith("mobile")) {
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("HOW RECALL WORKS")).toBeVisible();
+    await expect(dialog.getByText("No sources yet")).toBeVisible();
     await capture(page, info, "evidence-drawer");
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
@@ -264,7 +257,7 @@ test("setup status remains actionable when history cannot be authorized", async 
   );
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Your workspace. Ready when you are." }),
+    page.getByRole("heading", { name: "Set up your workspace" }),
   ).toBeVisible();
   await expect(
     page.getByText("Hosted authentication", { exact: true }),
@@ -422,3 +415,186 @@ test("failed reconciliation keeps no optimistic turn and explains uncertain hist
     0,
   );
 });
+
+test("appearance persists without hydration errors and system follows browser preference", async ({
+  page,
+}, info) => {
+  const appearance = page.getByRole("combobox", { name: "Appearance" });
+  await appearance.selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await capture(page, info, "dark-workspace");
+  await page.reload();
+  await expect(appearance).toHaveValue("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await appearance.selectOption("light");
+  await capture(page, info, "light-workspace");
+  await appearance.selectOption("system");
+  await page.emulateMedia({ colorScheme: "dark" });
+  expect(
+    await page
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).colorScheme),
+  ).toBe("dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  expect(
+    await page
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).colorScheme),
+  ).toBe("light");
+});
+
+test("personalized direct prompts fill the composer without automatically sending", async ({
+  page,
+}) => {
+  await page.route("**/api/suggestions", (route) =>
+    route.fulfill({
+      json: {
+        personalized: true,
+        suggestions: [
+          {
+            id: "history-topic",
+            text: "Compare the PostgreSQL options from my earlier research",
+            kind: "history",
+            topic: "PostgreSQL",
+          },
+        ],
+      },
+    }),
+  );
+  await page.reload();
+  const suggestion = page.getByRole("button", {
+    name: "Compare the PostgreSQL options from my earlier research",
+    exact: true,
+  });
+  await expect(suggestion).toBeVisible();
+  await expect(
+    page.getByText("From your conversations", { exact: true }),
+  ).toBeVisible();
+  let sends = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/chat"))
+      sends++;
+  });
+  await suggestion.click();
+  await expect(
+    page.getByRole("textbox", { name: "Ask Recall a question" }),
+  ).toHaveValue("Compare the PostgreSQL options from my earlier research");
+  await expect(
+    page.getByRole("textbox", { name: "Ask Recall a question" }),
+  ).toBeFocused();
+  expect(sends).toBe(0);
+});
+
+test("suggestion service failure leaves usable generic prompts", async ({
+  page,
+}) => {
+  await page.route("**/api/suggestions", (route) =>
+    route.fulfill({ status: 503, json: { error: "Unavailable" } }),
+  );
+  await page.reload();
+  await expect(page.locator("button.suggestion-row")).toHaveCount(3);
+  await page.locator("button.suggestion-row").first().click();
+  await expect(
+    page.getByRole("textbox", { name: "Ask Recall a question" }),
+  ).not.toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Send question", exact: true }),
+  ).toBeEnabled();
+});
+
+test("compact 390 by 520 viewport keeps prompts and composer reachable in both themes", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 520 });
+  for (const theme of ["light", "dark"]) {
+    await page
+      .getByRole("combobox", { name: "Appearance" })
+      .selectOption(theme);
+    const composer = await page.locator("form.composer").boundingBox();
+    expect(composer).not.toBeNull();
+    expect(composer!.y).toBeGreaterThanOrEqual(0);
+    expect(composer!.y + composer!.height).toBeLessThanOrEqual(520);
+    const rows = await page.locator(".suggestions").boundingBox();
+    expect(rows).not.toBeNull();
+    expect(rows!.y).toBeGreaterThanOrEqual(0);
+    expect(rows!.y + rows!.height).toBeLessThanOrEqual(composer!.y);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    await capture(page, info, `compact-${theme}`);
+  }
+});
+
+test("invalid appearance cookie safely falls back to system on the server", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([
+    {
+      name: "recall-theme",
+      value: "invalid-choice",
+      url: "http://127.0.0.1:3100",
+    },
+  ]);
+  const response = await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
+  await expect(page.getByRole("combobox", { name: "Appearance" })).toHaveValue(
+    "system",
+  );
+  expect(response?.headers()["cache-control"]).toMatch(/private|no-store/);
+});
+
+test("saved app research progressively supplies personal suggestions", async ({
+  page,
+}) => {
+  await sendQuestion(
+    page,
+    "Explain PostgreSQL transaction isolation for a small app.",
+  );
+  await startFresh(page);
+  await expect(
+    page.getByText("From your conversations", { exact: true }),
+  ).toBeVisible();
+  const suggestion = page
+    .locator("button.suggestion-row")
+    .filter({ hasText: "PostgreSQL" });
+  await expect(suggestion).toBeVisible();
+  await suggestion.click();
+  await expect(
+    page.getByRole("textbox", { name: "Ask Recall a question" }),
+  ).toHaveValue(/PostgreSQL/);
+  await expect(page.locator("article.message")).toHaveCount(0);
+});
+
+for (const width of [390, 740]) {
+  test(`keyboard-sized ${width} by 360 viewport keeps send controls in view`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 360 });
+    for (const theme of ["light", "dark"]) {
+      await page
+        .getByRole("combobox", { name: "Appearance" })
+        .selectOption(theme);
+      for (const control of [
+        page.getByRole("textbox", { name: "Ask Recall a question" }),
+        page.getByRole("button", { name: "Send question", exact: true }),
+      ]) {
+        const bounds = await control.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.y).toBeGreaterThanOrEqual(0);
+        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(360);
+      }
+      await page.locator("button.suggestion-row").first().click();
+      await expect(
+        page.getByRole("textbox", { name: "Ask Recall a question" }),
+      ).toBeFocused();
+      await expect(
+        page.getByRole("button", { name: "Send question", exact: true }),
+      ).toBeEnabled();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await capture(page, info, `keyboard-${width}-${theme}`);
+    }
+  });
+}

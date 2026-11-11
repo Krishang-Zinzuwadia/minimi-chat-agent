@@ -37,8 +37,10 @@ Keep keys server-side. Never commit `.env` / `.dev.vars`, use `NEXT_PUBLIC_*` fo
 
 ## What it does
 
-- A responsive Next.js workspace with conversation search, Markdown answers, evidence cards, mobile dialogs and reduced-motion support.
+- A restrained Next.js workspace with direct prompt suggestions above the composer, self-hosted IBM Plex Sans, conversation search, Markdown answers and on-demand source/history panels.
+- Light, Dark and System appearance with a first-party preference cookie, server-consistent rendering and accessible text contrast.
 - Timestamped conversation history, scoped to the authenticated owner in Neon Postgres.
+- Suggestions begin generic and gradually use safe, recent topics from that owner's questions. Selecting one fills and focuses the composer without sending it.
 - Deterministic date retrieval for `3 Nov`, `2026-11-03`, `yesterday`, `on Monday` and `last Tuesday`, interpreted in the question's timezone.
 - Postgres full-text retrieval for topic follow-ups across conversations, plus bounded recent context from the current conversation.
 - OpenAI **Responses API** with the real `gpt-6-luna` model, streaming output and stateless reasoning/tool continuation.
@@ -55,6 +57,14 @@ Try the challenge's scenarios after creating real history on the relevant dates:
 
 There is no fabricated preloaded conversation. A missing dated conversation produces an honest refusal to reconstruct it.
 
+## How prompt suggestions become personal
+
+`GET /api/suggestions` reads at most 40 of the authenticated owner's recent user messages. It makes no model/search calls and creates no inferred profile. Recognized public topics can appear after a clear recent question; short literal subjects or explicitly named projects require repetition in distinct questions. Recency, repeated interest and topic diversity determine which of the three generic rows are replaced.
+
+Credential/contact/sensitive-data and instruction-like patterns exclude the entire message. Suggestions use fixed follow-up templates rather than quoting whole conversations or asserting unrecorded facts. This is a conservative English heuristic, not semantic personalization or a complete sensitive-data classifier. Unrecognized topics remain generic; no connected email, GitHub or other account data is read. Offline demo history and personalization reset when its server restarts.
+
+Appearance is saved only in the first-party `recall-theme` cookie. System mode follows the browser's color preference through CSS. The server validates the cookie and does not publicly cache preference-specific HTML. Font files and their OFL license are bundled locally, with no font-service requests.
+
 ## Stack and layout
 
 - **UI:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, Motion, Radix Dialog, Lucide, React Markdown and GFM.
@@ -70,6 +80,7 @@ lib/agent.ts          Retrieval, bounded tool loop, citations, persistence
 lib/providers.ts      OpenAI Responses and Firecrawl adapters
 lib/memory.ts         Owner-scoped PostgreSQL queries
 lib/temporal.ts       Explicit date interpretation
+lib/suggestions.ts    Bounded, owner-history prompt suggestions
 lib/auth.ts           Loopback-only local mode / verified Access JWT
 lib/demo-memory.ts    Honest ephemeral offline mode
 lib/client/stream.ts  Incremental SSE parsing

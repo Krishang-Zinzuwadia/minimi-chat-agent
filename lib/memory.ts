@@ -6,8 +6,13 @@ import type {
   Source,
   MemoryContext,
   MemoryStore,
+  RecentQuestion,
 } from "./types";
 import { localDay, retrievalDate, lexicalTerms } from "./temporal";
+import {
+  MAX_SUGGESTION_QUESTIONS,
+  MAX_SUGGESTION_QUESTION_LENGTH,
+} from "./suggestions";
 export type QueryExecutor = (
   sql: string,
   parameters: unknown[],
@@ -83,6 +88,27 @@ export class NeonMemory implements MemoryStore {
         [this.ownerId, id, Math.min(500, Math.max(1, Math.trunc(limit) || 1))],
       )
     ).map(messageRow);
+  }
+  async recentQuestions(
+    limit = MAX_SUGGESTION_QUESTIONS,
+  ): Promise<RecentQuestion[]> {
+    const rows = await this.query(
+      `SELECT m.id,m.created_at,
+        CASE WHEN char_length(m.content)<=$3 THEN m.content ELSE '' END AS content
+       FROM messages m JOIN conversations c ON c.id=m.conversation_id
+       WHERE c.owner_id=$1 AND m.role='user'
+       ORDER BY m.created_at DESC,m.id DESC LIMIT $2`,
+      [
+        this.ownerId,
+        Math.min(MAX_SUGGESTION_QUESTIONS, Math.max(1, Math.trunc(limit) || 1)),
+        MAX_SUGGESTION_QUESTION_LENGTH,
+      ],
+    );
+    return rows.map((row) => ({
+      id: safeId(row.id),
+      content: String(row.content),
+      createdAt: iso(row.created_at),
+    }));
   }
   async addMessage(
     conversationId: string,
