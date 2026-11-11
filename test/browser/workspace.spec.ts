@@ -45,7 +45,23 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await info.attach(name, { path, contentType: "image/png" });
 }
 
+const hydrationErrors = new WeakMap<Page, string[]>();
+
 test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  hydrationErrors.set(page, errors);
+  // React reports recoverable hydration mismatches through console.error,
+  // not pageerror. Expected HTTP 409/503 resource logs are deliberately excluded.
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /hydrat|server[- ]rendered|did not match|text content does not match|Minified React error #(?:418|423|425)/i.test(
+        message.text(),
+      )
+    ) {
+      errors.push(message.text());
+    }
+  });
   await page.goto("/");
   await expect(
     page.getByText("Demo mode · No live AI or search.", { exact: false }),
@@ -60,6 +76,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
+  expect(hydrationErrors.get(page) ?? [], "React hydration errors").toEqual([]);
   expect((await page.pageErrors()).map((error) => error.message)).toEqual([]);
 });
 

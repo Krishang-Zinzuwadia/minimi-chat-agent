@@ -785,7 +785,7 @@ export function RecallWorkspace() {
           ) : (
             <motion.section
               className="welcome"
-              initial={reduced ? false : { opacity: 0, y: 12 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
