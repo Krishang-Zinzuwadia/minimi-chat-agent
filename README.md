@@ -2,7 +2,7 @@
 
 A time-aware research assistant: ask a question, return to an earlier conversation, and check what changed using current web evidence. Built for the [minimi hiring challenge](https://app.notion.com/p/minimi-hiring-challenge-build-a-chat-agent-4100a8b933b181b98277d8ea5a534d6f).
 
-**Status:** private development repository. Not submitted or publicly deployed. The implementation runs without credentials in an explicitly labelled offline demo. Live provider access and production hosting still require secure setup and live verification.
+**Status:** Implementation complete; live provider setup and deployment verification pending. Not submitted. The implementation runs without credentials in an explicitly labelled offline demo. Live provider access and production hosting still require secure setup and live verification.
 
 ## Run locally
 
@@ -110,4 +110,4 @@ See the [Cloudflare deployment runbook](docs/DEPLOYMENT.md). Public Worker route
 
 Retrieval is lexical, not semantic. Dates use documented conservative rules rather than a language-model date parser. Context is capped, so long histories can be incomplete. Sources can be outdated or wrong, and citation validation verifies provenance, not the truth of every generated claim. Cancellation may leave a saved question without an answer. There are per-turn limits and a shared 60-turn daily owner cap, but no currency-denominated billing quota, queue, retries for failed turns or resumable streams. Aborted or failed admitted turns count toward the daily cap. vinext/Cloudflare tooling is beta; a successful build is not a production runtime test.
 
-AI tools assisted implementation. Review the walkthrough and tests and be prepared to explain the choices. The official challenge asks for a public repository at submission; this repo stays **private** until its owner explicitly changes that decision.
+AI tools assisted implementation. Review the walkthrough and tests and be prepared to explain the choices. The official challenge asks for a public repository at submission; the owner has authorized public release.

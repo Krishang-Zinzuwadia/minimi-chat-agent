@@ -49,7 +49,7 @@ test("suggestions start with three useful generic prompts and no sample history"
     assert.ok(suggestion.text.length > 20 && suggestion.text.length < 160);
     assert.doesNotMatch(
       suggestion.text,
-      /Weave|Minimi|Tarun|Soni|Acme|yesterday/i,
+      /Atlas|Contoso|Alice|Bob|Acme|yesterday/i,
     );
   }
   assert.deepEqual(await memory.conversations(), []);

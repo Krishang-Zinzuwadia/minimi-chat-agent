@@ -14,12 +14,12 @@ no additional provider, credentials or database migration.
 
 **Nothing has been deployed.** Both `workersDev` and `previewUrls` are disabled in
 `cloudflare.config.ts`, with no custom-domain route. Keep them disabled until the
-release checklist below is complete. The private GitHub repository stays private.
+release checklist below is complete.
 
-Read-only account inspection on 2026-11-11 confirmed account
-`22372f05b35ed2d2cf9d27b5a49cf807` and the `krishangzinzuwadia.workers.dev`
-subdomain. No existing Minimi Worker or Pages project was found. The proposed URL
-`minimi-chat-agent.krishangzinzuwadia.workers.dev` is not a live deployment.
+An empty `minimi-chat-agent` Worker was provisioned on 2026-11-11 for secure
+configuration. Its code/version list is empty, it has never been deployed, and
+public/preview hostnames and custom-domain routes remain disabled. This is not
+a running app. A deployment URL has not been verified.
 
 ## Build toolchain
 
