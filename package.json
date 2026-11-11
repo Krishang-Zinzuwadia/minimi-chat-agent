@@ -1,0 +1,18 @@
+{
+  "name": "minimi-chat-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A time-aware chat agent with one tool: web search.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.js",
+    "demo": "node --env-file-if-exists=.env src/server.js --demo",
+    "smoke": "node scripts/smoke.js"
+  }
+}
